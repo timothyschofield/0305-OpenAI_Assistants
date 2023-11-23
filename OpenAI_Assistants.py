@@ -36,15 +36,16 @@ so you'll need to update it to the latest version (1.2.3 at time of writing).
 # Version: 1.3.5
 from openai import OpenAI
 import json
-from IPython.display import display
 
-# can't hand strings!
 def show_json(obj):
+
+    if isinstance(obj,  (float, int, str, list, dict, tuple)):
+        print(obj)
+        return
+
     xxx = json.loads(obj.model_dump_json())
     yyy = json.dumps(xxx, indent=2)
     print(yyy)
-
-
 
 
 client = OpenAI()
@@ -55,7 +56,7 @@ assistant = client.beta.assistants.create(
     model="gpt-4-1106-preview",
 )
 
-show_json(assistant)
+# show_json(assistant)
 
 """
 {'id': 'asst_MH2ZB7A5v8Azc2mwTi5XuKKv', 
@@ -204,7 +205,7 @@ run = wait_on_run(run, thread) # Why do we need to pass it thread - it already h
 # we can list the Messages in the Thread to see what got added by the Assistant.
 
 messages = client.beta.threads.messages.list(thread_id=thread.id)
-# show_json(messages)
+show_json(messages)
 
 
 
