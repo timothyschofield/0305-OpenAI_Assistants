@@ -40,23 +40,24 @@ import json
 def show_json(obj):
 
     if isinstance(obj,  (float, int, str, list, dict, tuple)):
-        print(obj)
-        return
+       print(obj)
+       return
 
-    xxx = json.loads(obj.model_dump_json())
-    yyy = json.dumps(xxx, indent=2)
-    print(yyy)
+    #python_dict = json.loads(obj.model_dump_json())
+    #string_in_json_format = json.dumps(python_dict, indent=2)
+    print(obj.model_dump_json(indent=2))
 
 
 client = OpenAI()
 
+# ========================== ASSISTANT ============================
 assistant = client.beta.assistants.create(
     name="Math Tutor",
     instructions="You are a personal math tutor. Answer questions briefly, in a sentence or less.",
     model="gpt-4-1106-preview",
 )
 
-# show_json(assistant)
+show_json(assistant)
 
 """
 {'id': 'asst_MH2ZB7A5v8Azc2mwTi5XuKKv', 
@@ -78,7 +79,7 @@ Next, we'll create a new Thread and add a Message to it.
 This will hold the state of our conversation, 
 so we don't have re-send the entire message history each time.
 """
-
+# ========================== THREAD ============================
 thread = client.beta.threads.create()
 # show_json(thread)
 """
@@ -87,7 +88,7 @@ thread = client.beta.threads.create()
 'metadata': {}, 
 'object': 'thread'}
 """
-
+# ========================== MESSAGE ============================
 # Then add the Message to the thread:
 message = client.beta.threads.messages.create(
     thread_id=thread.id,
@@ -109,7 +110,7 @@ message = client.beta.threads.messages.create(
 'run_id': None, 
 'thread_id': 'thread_kKjvORn1Fes4LNKPO2T2s8oN'}
 """
-# ========================== Runs ============================
+# ========================== RUNS ============================
 """
 Notice how the Thread we created is NOT associated with the Assistant we created earlier! 
 Threads exist independently from Assistants.
@@ -205,7 +206,7 @@ run = wait_on_run(run, thread) # Why do we need to pass it thread - it already h
 # we can list the Messages in the Thread to see what got added by the Assistant.
 
 messages = client.beta.threads.messages.list(thread_id=thread.id)
-show_json(messages)
+#show_json(messages)
 
 
 
