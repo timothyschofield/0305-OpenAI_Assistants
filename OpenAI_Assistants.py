@@ -24,6 +24,8 @@ The primitives of the Assistants API are
 "Threads": which represent the state of a conversation
 "Runs": which power the execution of an Assistant on a Thread, including textual responses and multi-step tool use
 
+Note: "User" does NOT exist as an entity
+
 Here is how to use them to create powerful, stateful experiences.
 
 === Setup ===
@@ -38,6 +40,9 @@ so you'll need to update it to the latest version (1.2.3 at time of writing).
 # Version: 1.3.5
 from openai import OpenAI
 import json
+import time
+
+# Helper functions
 
 def show_json(obj):
 
@@ -48,6 +53,40 @@ def show_json(obj):
     print(obj.model_dump_json(indent=2))
 # eo show_json
 
+# Creating a Run is an asynchronous operation. 
+# It will return immediately with the Run's metadata, which includes a status that will initially be set to queued. 
+# The status will be updated as the Assistant performs operations (like using tools and adding messages).
+
+# To know when the Assistant has completed processing, we can poll the Run in a loop.
+# run.status can be: 
+# queued, in_progress, requires_action, cancelling, cancelled, failed, completed, or expired 
+# These are called "Steps"
+
+# In practive we only need to check for "queued" or "in_progress"
+
+def wait_on_run(run, thread):
+    while run.status == "queued" or run.status == "in_progress":
+        run = client.beta.threads.runs.retrieve(
+            thread_id=thread.id,
+            run_id=run.id,
+        )
+        time.sleep(0.5)
+    return run
+# eo wait_for_run
+
+# Pretty printing helper
+def pretty_print(messages):
+    print("# Messages")
+    for m in messages:
+        print(f"{m.role}: {m.content[0].text.value}")
+    print()
+
+# After a Run has returned, this gets the list of messages in a Thread 
+def get_response(thread):
+    return client.beta.threads.messages.list(thread_id=thread.id, order="asc")
+# eo get_response
+
+# #################################################################
 
 client = OpenAI()
 
@@ -57,7 +96,6 @@ assistant = client.beta.assistants.create(
     instructions="You are a personal math tutor. Answer questions briefly, in a sentence or less.",
     model="gpt-4-1106-preview",
 )
-
 # show_json(assistant)
 
 """
@@ -75,13 +113,13 @@ assistant = client.beta.assistants.create(
 
 """
 You refer to your Assistant throughout Threads and Runs, using its id.
-
 Next, we'll create a new Thread and add a Message to it. 
 This will hold the state of our conversation, 
 so we don't have re-send the entire message history each time.
 """
 
 # ========================== THREAD ============================
+# Note: No arguments
 thread = client.beta.threads.create()
 # show_json(thread)
 """
@@ -92,7 +130,7 @@ thread = client.beta.threads.create()
 """
 
 # ========================== MESSAGE ============================
-# Then add the Message to the thread:
+# Create a message and add it to the thread:
 message = client.beta.threads.messages.create(
     thread_id=thread.id,
     role="user",
@@ -119,10 +157,6 @@ message = client.beta.threads.messages.create(
 Notice how the Thread we created is NOT associated with the Assistant we created earlier! 
 Threads exist independently from Assistants.
 
-[Assistant]                 (Assistant is indipendant for the moment)
-[Thread]<------[Message]    (Thread has a Message)
-"""
-"""
 To get a COMPLETION from an Assistant for a given Thread, we must create a Run. 
 Creating a Run will indicate to an Assistant it should look at 
 the messages in the Thread and take action: either by adding a single response, or using tools.
@@ -131,13 +165,10 @@ To get our Assistant to respond to the user, let's create the Run.
 As mentioned earlier, you must specify both the Assistant and the Thread.
 
      ⬐------[Assistant] (has general role)
-[Run]←-------[Thread]←------[Message] (has specific task)
+[Run]←-------[Thread]←------[Message] (has specific task + role)
 
 """
-run = client.beta.threads.runs.create(
-    thread_id=thread.id,
-    assistant_id=assistant.id,
-)
+run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant.id)
 # show_json(run)
 """
 {'id': 'run_nUnwNbShNF05h3N7vvnuaqsJ', 
@@ -159,28 +190,6 @@ run = client.beta.threads.runs.create(
 'thread_id': 'thread_A1vgvpYNacYGLpLrPkH3skLA', 
 'tools': []}
 """
-# Creating a Run is an asynchronous operation. 
-# It will return immediately with the Run's metadata, which includes a status that will initially be set to queued. 
-# The status will be updated as the Assistant performs operations (like using tools and adding messages).
-
-# To know when the Assistant has completed processing, we can poll the Run in a loop.
-# run.status can be: 
-# queued, in_progress, requires_action, cancelling, cancelled, failed, completed, or expired 
-# These are called "Steps"
-
-# In practive we only need to check for queued or in_progress
-
-import time
-
-def wait_on_run(run, thread):
-    while run.status == "queued" or run.status == "in_progress":
-        run = client.beta.threads.runs.retrieve(
-            thread_id=thread.id,
-            run_id=run.id,
-        )
-        time.sleep(0.5)
-    return run
-# eo wait_for_run
 
 run = wait_on_run(run, thread) # Why do we need to pass it thread - it already has thread!
 # show_json(run)
@@ -263,23 +272,19 @@ messages = client.beta.threads.messages.list(thread_id=thread.id)
 }
 
 """
-# Messages are ordered in reverse-chronological order (results at the top, this is opposite to Chat Completion and usual error logs etc.), 
-# this was done so the most recent results are always on the first page (since results can be paginated).
+# Messages are ordered in reverse-chronological order (Most recent results at the top, unlike Chat Completion and usual the error logs etc.). 
+# This is done so the most recent results are always on the first page (since results can be paginated).
 
-
-# Let's ask our Assistant to explain the result a bit further!
+# Let's ask our Assistant to explain the result a bit further! So its the same thread of conversation
 # Create a message to append to our thread
 message = client.beta.threads.messages.create(thread_id=thread.id, role="user", content="Could you explain this to me?")
 """
      ⬐------[Assistant] (has general role)
-[Run]←-------[Thread]←------[Message] (has specific task) (Could you explain this to me?)
+[Run]←-------[Thread]←------[Message] (has specific task + role) (Could you explain this to me?)
 """
 
-# Execute our run
-run = client.beta.threads.runs.create(
-    thread_id=thread.id,
-    assistant_id=assistant.id,
-)
+# Execute our run for claification
+run = client.beta.threads.runs.create(thread_id=thread.id,assistant_id=assistant.id)
 
 # Wait for completion
 wait_on_run(run, thread)
@@ -287,7 +292,7 @@ wait_on_run(run, thread)
 # Retrieve all the messages added after our last user message (Could you explain...)
 # So the thread maintains the context in which the Math Tutor  elusidates
 messages = client.beta.threads.messages.list(thread_id=thread.id, order="asc", after=message.id)
-show_json(messages)
+# show_json(messages)
 
 # This may feel like a lot of steps to get a response back, especially for this simple example. 
 # However, you'll soon see how we can add very powerful functionality to our Assistant without changing much code at all! - go to OpenAI_Assistant2.py
@@ -321,15 +326,92 @@ show_json(messages)
   "has_more": false
 }
 """
-# go to OpenAI_Assistant2.py
+############################### PART 2 ###################################
 
+"""
+24 and 25 November 2023
 
+The previouse example may feel like a lot of steps to get a response back, 
+especially for this simple example. 
+However, you'll soon see how we can add very powerful functionality to our 
+Assistant without changing much code at all!
 
+Example
 
+Let's take a look at how we could potentially put all of this together. 
+Below is all the code you need to use an Assistant you've created.
 
+"""
+"""
+     ⬐------[Assistant] (has a general role)
+[Run]←-------[Thread]←------[Message] (has specific task + role) (user: Could you explain this to me?)
+"""
+# Save the Maths Assistant id
+MATH_ASSISTANT_ID = assistant.id
 
+# Creates a Message on a Thread and returns a Run
+def submit_message(assistant_id, thread, user_message):
 
+    # The users request is indipendant of who they ask
+    message = client.beta.threads.messages.create(thread_id=thread.id, role="user", content=user_message)
 
+    # The Assistant is associated with the user_message only at the time creating a Run
+    run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant_id)
+    return run
+# eo submit_message
+
+def create_thread_and_run(user_input):
+    
+    # Creates a new Thread of conversation
+    thread = client.beta.threads.create()
+
+    # Submits the Thead of conversation to the MATH_ASSISTANT, with the user input
+    run = submit_message(MATH_ASSISTANT_ID, thread, user_input)
+    return thread, run
+# eo create_thread_and_run
+
+# Emulating concurrent user requests
+# All these Threads are new but they are all requests by "user" to MATH_ASSISTANT
+thread1, run1 = create_thread_and_run("I need to solve the equation `3x + 11 = 14`. Can you help me?")
+thread2, run2 = create_thread_and_run("Could you explain linear algebra to me?")
+thread3, run3 = create_thread_and_run("I don't like math. What can I do?")
+
+# Wait for Run 1
+run1 = wait_on_run(run1, thread1)
+pretty_print(get_response(thread1))
+
+# Wait for Run 2
+run2 = wait_on_run(run2, thread2)
+pretty_print(get_response(thread2))
+
+# Wait for Run 3
+run3 = wait_on_run(run3, thread3)
+pretty_print(get_response(thread3))
+
+# Thank our assistant on Thread 3 :)
+run4 = submit_message(MATH_ASSISTANT_ID, thread3, "Thank you!")
+run4 = wait_on_run(run4, thread3)
+pretty_print(get_response(thread3))
+
+# Messages
+# user: I need to solve the equation `3x + 11 = 14`. Can you help me?
+# assistant: Yes, subtract 11 from both sides to get `3x = 3`, then divide both sides by 3 to find `x = 1`.
+
+# Messages
+# user: Could you explain linear algebra to me?
+# assistant: Linear algebra is the branch of mathematics concerning linear equations, linear functions, and their representations through matrices and vector spaces.
+
+# Messages
+# user: I don't like math. What can I do?
+# assistant: Find aspects of math that relate to your interests or everyday life, try different learning tools like games or apps, and consider working with a tutor who can personalize your learning experience to make it more enjoyable.
+
+# Messages
+# user: I don't like math. What can I do?
+# assistant: Find aspects of math that relate to your interests or everyday life, try different learning tools like games or apps, and consider working with a tutor who can personalize your learning experience to make it more enjoyable.
+# user: Thank you!
+# assistant: You're welcome! If you have any more questions or need help with math, feel free to ask!
+
+# END
 
 
 
