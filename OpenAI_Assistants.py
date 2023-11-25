@@ -1,6 +1,8 @@
 """
 OpenAI Assistants
 
+OpenAI_Assistants.py
+
 23 November 2023
 
 https://cookbook.openai.com/examples/assistants_api_overview_python
@@ -39,13 +41,12 @@ import json
 
 def show_json(obj):
 
-    if isinstance(obj,  (float, int, str, list, dict, tuple)):
+    if isinstance(obj,  (float, int, str, list, dict, tuple)): 
        print(obj)
        return
-
-    #python_dict = json.loads(obj.model_dump_json())
-    #string_in_json_format = json.dumps(python_dict, indent=2)
+    
     print(obj.model_dump_json(indent=2))
+# eo show_json
 
 
 client = OpenAI()
@@ -57,7 +58,7 @@ assistant = client.beta.assistants.create(
     model="gpt-4-1106-preview",
 )
 
-show_json(assistant)
+# show_json(assistant)
 
 """
 {'id': 'asst_MH2ZB7A5v8Azc2mwTi5XuKKv', 
@@ -79,6 +80,7 @@ Next, we'll create a new Thread and add a Message to it.
 This will hold the state of our conversation, 
 so we don't have re-send the entire message history each time.
 """
+
 # ========================== THREAD ============================
 thread = client.beta.threads.create()
 # show_json(thread)
@@ -88,6 +90,7 @@ thread = client.beta.threads.create()
 'metadata': {}, 
 'object': 'thread'}
 """
+
 # ========================== MESSAGE ============================
 # Then add the Message to the thread:
 message = client.beta.threads.messages.create(
@@ -110,6 +113,7 @@ message = client.beta.threads.messages.create(
 'run_id': None, 
 'thread_id': 'thread_kKjvORn1Fes4LNKPO2T2s8oN'}
 """
+
 # ========================== RUNS ============================
 """
 Notice how the Thread we created is NOT associated with the Assistant we created earlier! 
@@ -126,9 +130,9 @@ the messages in the Thread and take action: either by adding a single response, 
 To get our Assistant to respond to the user, let's create the Run. 
 As mentioned earlier, you must specify both the Assistant and the Thread.
 
-     ⬐------[Assistant]
-[Run]←-------[Thread]←------[Message]
-↷
+     ⬐------[Assistant] (has general role)
+[Run]←-------[Thread]←------[Message] (has specific task)
+
 """
 run = client.beta.threads.runs.create(
     thread_id=thread.id,
@@ -164,7 +168,6 @@ run = client.beta.threads.runs.create(
 # queued, in_progress, requires_action, cancelling, cancelled, failed, completed, or expired 
 # These are called "Steps"
 
-
 # In practive we only need to check for queued or in_progress
 
 import time
@@ -177,6 +180,7 @@ def wait_on_run(run, thread):
         )
         time.sleep(0.5)
     return run
+# eo wait_for_run
 
 run = wait_on_run(run, thread) # Why do we need to pass it thread - it already has thread!
 # show_json(run)
@@ -204,10 +208,120 @@ run = wait_on_run(run, thread) # Why do we need to pass it thread - it already h
 # Messages
 # Now that the Run has completed, 
 # we can list the Messages in the Thread to see what got added by the Assistant.
-
+# ========================== MESSAGES ON RUN COMPLETION ============================
 messages = client.beta.threads.messages.list(thread_id=thread.id)
-#show_json(messages)
+# show_json(messages)
+"""
+{
+  "data": [
+    {
+      "id": "msg_KlQJJuK6TOeGx8qnFHaFdes9",
+      "assistant_id": "asst_yVBRRMtRt0Lte2YukTMor5C0",
+      "content": [
+        {
+          "text": {
+            "annotations": [],
+            "value": "Yes, subtract 11 from both sides to get `3x = 3` and then divide both sides by 3 to find `x = 1`."
+          },
+          "type": "text"
+        }
+      ],
+      "created_at": 1700817312,
+      "file_ids": [],
+      "metadata": {},
+      "object": "thread.message",
+      "role": "assistant",
+      "run_id": "run_fbzcqmAVwrb0S11S4tJV50ir",
+      "thread_id": "thread_UL43Zp2LOrPT08KLUh2FO9OS"
+    },
+   
+     {
+      "id": "msg_Mke5Q3Rtjkb8pDCSxd6Agz5l",
+      "assistant_id": null,
+      "content": [
+        {
+          "text": {
+            "annotations": [],
+            "value": "I need to solve the equation `3x + 11 = 14`. Can you help me?"
+          },
+          "type": "text"
+        }
+      ],
+      "created_at": 1700817311,
+      "file_ids": [],
+      "metadata": {},
+      "object": "thread.message",
+      "role": "user",
+      "run_id": null,
+      "thread_id": "thread_UL43Zp2LOrPT08KLUh2FO9OS"
+    }
+  ],
+  "object": "list",
+  "first_id": "msg_KlQJJuK6TOeGx8qnFHaFdes9",
+  "last_id": "msg_Mke5Q3Rtjkb8pDCSxd6Agz5l",
+  "has_more": false
+}
 
+"""
+# Messages are ordered in reverse-chronological order (results at the top, this is opposite to Chat Completion and usual error logs etc.), 
+# this was done so the most recent results are always on the first page (since results can be paginated).
+
+
+# Let's ask our Assistant to explain the result a bit further!
+# Create a message to append to our thread
+message = client.beta.threads.messages.create(thread_id=thread.id, role="user", content="Could you explain this to me?")
+"""
+     ⬐------[Assistant] (has general role)
+[Run]←-------[Thread]←------[Message] (has specific task) (Could you explain this to me?)
+"""
+
+# Execute our run
+run = client.beta.threads.runs.create(
+    thread_id=thread.id,
+    assistant_id=assistant.id,
+)
+
+# Wait for completion
+wait_on_run(run, thread)
+
+# Retrieve all the messages added after our last user message (Could you explain...)
+# So the thread maintains the context in which the Math Tutor  elusidates
+messages = client.beta.threads.messages.list(thread_id=thread.id, order="asc", after=message.id)
+show_json(messages)
+
+# This may feel like a lot of steps to get a response back, especially for this simple example. 
+# However, you'll soon see how we can add very powerful functionality to our Assistant without changing much code at all! - go to OpenAI_Assistant2.py
+"""
+{
+  "data": [
+    {
+      "id": "msg_AMvlXfBVGNUzRaA3OboyB65d",
+      "assistant_id": "asst_ECOfltssrDxrlDv7RwyfWbes",
+      "content": [
+        {
+          "text": {
+            "annotations": [],
+            "value": "Certainly! To solve the equation `3x + 11 = 14`:\n\n1. Subtract 11 from both sides to isolate the term with the variable: `3x + 11 - 11 = 14 - 11`, which simplifies to `3x = 3`.\n2. Divide both sides by 3 to solve for x: `3x / 3 = 3 / 3`, which simplifies to `x = 1`.\n\nSo the solution is `x = 1`."
+          },
+          "type": "text"
+        }
+      ],
+      "created_at": 1700820614,
+      "file_ids": [],
+      "metadata": {},
+      "object": "thread.message",
+      "role": "assistant",
+      "run_id": "run_4MBlrObvvC7zExHs0Al3WE26",
+      "thread_id": "thread_Fp6hCqxmHIgYFiYvWgOqU6Gg"
+    }
+  ],
+  "object": "list",
+  "first_id": "msg_AMvlXfBVGNUzRaA3OboyB65d",
+  "last_id": "msg_AMvlXfBVGNUzRaA3OboyB65d",
+  "has_more": false
+}
+"""
+# go to OpenAI_Assistant2.py
 
 
 
