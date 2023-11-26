@@ -33,64 +33,20 @@ Python SDK
 Note: We've updated our Python SDK to add support for the Assistants API, 
 so you'll need to update it to the latest version (1.2.3 at time of writing).
 
-=== Complete Example with Assistants API ===
+
 """
 # pip install --upgrade openai
 # pip show openai
 # Version: 1.3.5
 from openai import OpenAI
-import json
-import time
-
-# Helper functions
-
-def show_json(obj):
-
-    if isinstance(obj,  (float, int, str, list, dict, tuple)): 
-       print(obj)
-       return
-    
-    print(obj.model_dump_json(indent=2))
-# eo show_json
-
-# Creating a Run is an asynchronous operation. 
-# It will return immediately with the Run's metadata, which includes a status that will initially be set to queued. 
-# The status will be updated as the Assistant performs operations (like using tools and adding messages).
-
-# To know when the Assistant has completed processing, we can poll the Run in a loop.
-# run.status can be: 
-# queued, in_progress, requires_action, cancelling, cancelled, failed, completed, or expired 
-# These are called "Steps"
-
-# In practive we only need to check for "queued" or "in_progress"
-
-def wait_on_run(run, thread):
-    while run.status == "queued" or run.status == "in_progress":
-        run = client.beta.threads.runs.retrieve(
-            thread_id=thread.id,
-            run_id=run.id,
-        )
-        time.sleep(0.5)
-    return run
-# eo wait_for_run
-
-# Pretty printing helper
-def pretty_print(messages):
-    print("# Messages")
-    for m in messages:
-        print(f"{m.role}: {m.content[0].text.value}")
-    print()
-
-# After a Run has returned, this gets the list of messages in a Thread 
-def get_response(thread):
-    return client.beta.threads.messages.list(thread_id=thread.id, order="asc")
-# eo get_response
-
-# #################################################################
+from _Assistants_helper_module import *
 
 client = OpenAI()
 
+
+
 # ========================== ASSISTANT ============================
+# Note: It is the Assistant that contains a reference to the Model
 assistant = client.beta.assistants.create(
     name="Math Tutor",
     instructions="You are a personal math tutor. Answer questions briefly, in a sentence or less.",
@@ -191,7 +147,7 @@ run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistan
 'tools': []}
 """
 
-run = wait_on_run(run, thread) # Why do we need to pass it thread - it already has thread!
+run = wait_on_run(client, run, thread) # Why do we need to pass it thread - it already has thread!
 # show_json(run)
 """
 {'id': 'run_o8mgxeokBtikgUAudeKNM1Gp', 
@@ -287,7 +243,7 @@ message = client.beta.threads.messages.create(thread_id=thread.id, role="user", 
 run = client.beta.threads.runs.create(thread_id=thread.id,assistant_id=assistant.id)
 
 # Wait for completion
-wait_on_run(run, thread)
+wait_on_run(client, run, thread)
 
 # Retrieve all the messages added after our last user message (Could you explain...)
 # So the thread maintains the context in which the Math Tutor  elusidates
@@ -377,21 +333,21 @@ thread2, run2 = create_thread_and_run("Could you explain linear algebra to me?")
 thread3, run3 = create_thread_and_run("I don't like math. What can I do?")
 
 # Wait for Run 1
-run1 = wait_on_run(run1, thread1)
-pretty_print(get_response(thread1))
+run1 = wait_on_run(client, run1, thread1)
+pretty_print(get_response(client, thread1))
 
 # Wait for Run 2
-run2 = wait_on_run(run2, thread2)
-pretty_print(get_response(thread2))
+run2 = wait_on_run(client, run2, thread2)
+pretty_print(get_response(client, thread2))
 
 # Wait for Run 3
-run3 = wait_on_run(run3, thread3)
-pretty_print(get_response(thread3))
+run3 = wait_on_run(client, run3, thread3)
+pretty_print(get_response(client, thread3))
 
-# Thank our assistant on Thread 3 :)
+# Thank our assistant on Thread 3
 run4 = submit_message(MATH_ASSISTANT_ID, thread3, "Thank you!")
-run4 = wait_on_run(run4, thread3)
-pretty_print(get_response(thread3))
+run4 = wait_on_run(client, run4, thread3)
+pretty_print(get_response(client, thread3))
 
 # Messages
 # user: I need to solve the equation `3x + 11 = 14`. Can you help me?

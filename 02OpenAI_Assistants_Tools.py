@@ -13,7 +13,7 @@ https://cookbook.openai.com/examples/assistants_api_overview_python
 # like Code Interpreter, Retrieval, and custom Functions. 
 # Let's take a look at each.
 
-
+# Let's equip our Math Tutor with the Code Interpreter too
 
 
 
