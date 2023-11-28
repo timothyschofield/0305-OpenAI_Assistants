@@ -81,8 +81,9 @@ To import calculation.py, you need to add calculation.py's directory to sys.path
 
 To speed module loading, Python can create byte-compiled files with the extension .pyc.
 When a Python source file (module) is imported during an execution for the first time, 
-the appropriate .pyc file is created automatically. If the same module is imported again, then the already created 
-.pyc file is used. These .pyc files are usually created in the same directory as the corresponding .py files.
+the appropriate .pyc file is created automatically in a folder called __pycache__ (also created automaticaly). 
+If the same module is imported again, then the already created .pyc file is used. 
+These __pycache__ folder and .pyc files is/are usually created in the same directory as the corresponding .py files.
 
 The pyc files contain bytecode, which is an intermediary between Python code and machine code.
 They are platform independent, as the conversion from bytecode to machine code, 
@@ -109,6 +110,8 @@ All attributes beginning with an underscore are default python attributes associ
 import json
 import time
 
+"""
+"""
 def show_json(obj):
 
     if isinstance(obj,  (float, int, str, list, dict, tuple)): 
@@ -118,17 +121,18 @@ def show_json(obj):
     print(obj.model_dump_json(indent=2))
 # eo show_json
 
-# Creating a Run is an asynchronous operation. 
-# It will return immediately with the Run's metadata, which includes a status that will initially be set to queued. 
-# The status will be updated as the Assistant performs operations (like using tools and adding messages).
+"""
+  Creating a Run is an asynchronous operation. 
+  It will return immediately with the Run's metadata, which includes a status that will initially be set to queued. 
+  The status will be updated as the Assistant performs operations (like using tools and adding messages).
 
-# To know when the Assistant has completed processing, we can poll the Run in a loop.
-# run.status can be: 
-# queued, in_progress, requires_action, cancelling, cancelled, failed, completed, or expired 
-# These are called "Steps"
+  To know when the Assistant has completed processing, we can poll the Run in a loop.
+  run.status can be: 
+  queued, in_progress, requires_action, cancelling, cancelled, failed, completed, or expired 
+  These are called "Steps"
 
-# In practive we only need to check for "queued" or "in_progress"
-
+  In practive we only need to check for "queued" or "in_progress"
+"""
 def wait_on_run(client, run, thread):
     while run.status == "queued" or run.status == "in_progress":
         run = client.beta.threads.runs.retrieve(
@@ -139,18 +143,46 @@ def wait_on_run(client, run, thread):
     return run
 # eo wait_for_run
 
-# Pretty printing helper
+"""
+  Pretty printing helper
+"""
 def pretty_print(messages):
     print("# Messages")
     for m in messages:
         print(f"{m.role}: {m.content[0].text.value}")
     print()
+# eo pretty_print
 
-# After a Run has returned, this gets the list of messages in a Thread 
+"""
+  After a Run has returned, this returns the list of messages in a Thread
+"""
 def get_response(client, thread):
     return client.beta.threads.messages.list(thread_id=thread.id, order="asc")
 # eo get_response
 
+"""
+"""
+def create_thread_and_run(client, assistant_id, user_input):
 
+    # Creates a new Thread of conversation
+    thread = client.beta.threads.create()
+
+    # Submits the Thead of conversation to the MATH_ASSISTANT, with the user input
+    run = submit_message(client, assistant_id, thread, user_input)
+    return thread, run
+# eo create_thread_and_run
+
+"""
+  Creates a Message on a Thread and returns a Run
+"""
+def submit_message(client, assistant_id, thread, user_message):
+
+    # The users request is indipendant of who they ask
+    message = client.beta.threads.messages.create(thread_id=thread.id, role="user", content=user_message)
+
+    # The Assistant is associated with the user_message only at the time creating a Run
+    run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant_id)
+    return run
+# eo submit_message
 
 

@@ -43,8 +43,6 @@ from _Assistants_helper_module import *
 
 client = OpenAI()
 
-
-
 # ========================== ASSISTANT ============================
 # Note: It is the Assistant that contains a reference to the Model
 assistant = client.beta.assistants.create(
@@ -305,32 +303,11 @@ Below is all the code you need to use an Assistant you've created.
 # Save the Maths Assistant id
 MATH_ASSISTANT_ID = assistant.id
 
-# Creates a Message on a Thread and returns a Run
-def submit_message(assistant_id, thread, user_message):
-
-    # The users request is indipendant of who they ask
-    message = client.beta.threads.messages.create(thread_id=thread.id, role="user", content=user_message)
-
-    # The Assistant is associated with the user_message only at the time creating a Run
-    run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant_id)
-    return run
-# eo submit_message
-
-def create_thread_and_run(user_input):
-    
-    # Creates a new Thread of conversation
-    thread = client.beta.threads.create()
-
-    # Submits the Thead of conversation to the MATH_ASSISTANT, with the user input
-    run = submit_message(MATH_ASSISTANT_ID, thread, user_input)
-    return thread, run
-# eo create_thread_and_run
-
 # Emulating concurrent user requests
 # All these Threads are new but they are all requests by "user" to MATH_ASSISTANT
-thread1, run1 = create_thread_and_run("I need to solve the equation `3x + 11 = 14`. Can you help me?")
-thread2, run2 = create_thread_and_run("Could you explain linear algebra to me?")
-thread3, run3 = create_thread_and_run("I don't like math. What can I do?")
+thread1, run1 = create_thread_and_run(client, MATH_ASSISTANT_ID, "I need to solve the equation `3x + 11 = 14`. Can you help me?")
+thread2, run2 = create_thread_and_run(client, MATH_ASSISTANT_ID, "Could you explain linear algebra to me?")
+thread3, run3 = create_thread_and_run(client, MATH_ASSISTANT_ID, "I don't like math. What can I do?")
 
 # Wait for Run 1
 run1 = wait_on_run(client, run1, thread1)
@@ -345,7 +322,7 @@ run3 = wait_on_run(client, run3, thread3)
 pretty_print(get_response(client, thread3))
 
 # Thank our assistant on Thread 3
-run4 = submit_message(MATH_ASSISTANT_ID, thread3, "Thank you!")
+run4 = submit_message(client, MATH_ASSISTANT_ID, thread3, "Thank you!")
 run4 = wait_on_run(client, run4, thread3)
 pretty_print(get_response(client, thread3))
 
